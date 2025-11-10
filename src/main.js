@@ -81,30 +81,30 @@ class TowerDefenseGame {
     // アセット読み込み
     const imageList = [
       // 敵
-      { key: 'enemy_slime', path: './assets/sprites/enemy/slime.png' },
-      { key: 'enemy_goblin', path: './assets/sprites/enemy/goblin.png' },
-      { key: 'enemy_thief', path: './assets/sprites/enemy/thief.png' },
-      { key: 'enemy_golem', path: './assets/sprites/enemy/golem.png' },
-      { key: 'enemy_demon_king', path: './assets/sprites/enemy/demon_king.png' },
+      { key: 'enemy_slime', path: './public/assets/sprites/enemy/slime.png' },
+      { key: 'enemy_goblin', path: './public/assets/sprites/enemy/goblin.png' },
+      { key: 'enemy_thief', path: './public/assets/sprites/enemy/thief.png' },
+      { key: 'enemy_golem', path: './public/assets/sprites/enemy/golem.png' },
+      { key: 'enemy_demon_king', path: './public/assets/sprites/enemy/demon_king.png' },
 
       // タワー（アーチャー8方向）
-      { key: 'tower_archer_u', path: './assets/sprites/ally/archer/archer_u.png' },
-      { key: 'tower_archer_d', path: './assets/sprites/ally/archer/archer_d.png' },
-      { key: 'tower_archer_l', path: './assets/sprites/ally/archer/archer_l.png' },
-      { key: 'tower_archer_r', path: './assets/sprites/ally/archer/archer_r.png' },
-      { key: 'tower_archer_lu', path: './assets/sprites/ally/archer/archer_lu.png' },
-      { key: 'tower_archer_ld', path: './assets/sprites/ally/archer/archer_ld.png' },
-      { key: 'tower_archer_ru', path: './assets/sprites/ally/archer/archer_ru.png' },
-      { key: 'tower_archer_rd', path: './assets/sprites/ally/archer/archer_rd.png' },
+      { key: 'tower_archer_u', path: './public/assets/sprites/ally/archer/archer_u.png' },
+      { key: 'tower_archer_d', path: './public/assets/sprites/ally/archer/archer_d.png' },
+      { key: 'tower_archer_l', path: './public/assets/sprites/ally/archer/archer_l.png' },
+      { key: 'tower_archer_r', path: './public/assets/sprites/ally/archer/archer_r.png' },
+      { key: 'tower_archer_lu', path: './public/assets/sprites/ally/archer/archer_lu.png' },
+      { key: 'tower_archer_ld', path: './public/assets/sprites/ally/archer/archer_ld.png' },
+      { key: 'tower_archer_ru', path: './public/assets/sprites/ally/archer/archer_ru.png' },
+      { key: 'tower_archer_rd', path: './public/assets/sprites/ally/archer/archer_rd.png' },
 
       // タワー（剣士4方向）
-      { key: 'tower_solder_u', path: './assets/sprites/ally/solder/solder_u.png' },
-      { key: 'tower_solder_d', path: './assets/sprites/ally/solder/solder_d.png' },
-      { key: 'tower_solder_l', path: './assets/sprites/ally/solder/solder_l.png' },
-      { key: 'tower_solder_r', path: './assets/sprites/ally/solder/solder_r.png' },
+      { key: 'tower_solder_u', path: './public/assets/sprites/ally/solder/solder_u.png' },
+      { key: 'tower_solder_d', path: './public/assets/sprites/ally/solder/solder_d.png' },
+      { key: 'tower_solder_l', path: './public/assets/sprites/ally/solder/solder_l.png' },
+      { key: 'tower_solder_r', path: './public/assets/sprites/ally/solder/solder_r.png' },
 
       // 基地
-      { key: 'base_tower', path: './assets/sprites/ally/tower.png' }
+      { key: 'base_tower', path: './public/assets/sprites/ally/tower.png' }
     ];
 
     const success = await this.assetLoader.loadAll(imageList, []);
