@@ -15,6 +15,7 @@ import { Economy } from './game/economy.js';
 import { StageManager } from './game/stage.js';
 import { UI } from './game/ui.js';
 import { SaveManager } from './game/save.js';
+import { WebRTCManager } from './net/webrtc.js';
 
 /**
  * ゲーム状態
@@ -36,6 +37,7 @@ class TowerDefenseGame {
   constructor() {
     this.canvas = document.getElementById('game-canvas');
     this.loadingDiv = document.getElementById('loading');
+    this.peerVideoEl = document.getElementById('peer-video');
 
     // Canvas サイズ設定（フィールド + 右サイドパネル + 下HUD）
     this.fieldWidth = TILE_SIZE * 10; // 640px
@@ -57,6 +59,7 @@ class TowerDefenseGame {
     this.waveManager = new WaveManager(this.gameMap.getPathWorldCoordinates());
     this.ui = new UI(this.canvas);
     this.saveManager = new SaveManager();
+    this.webrtc = new WebRTCManager();
 
     // ゲームオブジェクト
     this.base = null;
@@ -72,6 +75,9 @@ class TowerDefenseGame {
 
     // キーボードイベント
     this.setupKeyboardHandlers();
+
+    // WebRTC UI セットアップ
+    this.setupWebRTCControls();
   }
 
   /**
@@ -111,6 +117,17 @@ class TowerDefenseGame {
 
     if (success) {
       this.loadingDiv.classList.add('hidden');
+      // キャンバス映像をP2P配信に使えるよう準備
+      try {
+        await this.webrtc.initLocalStreamFromCanvas(this.canvas, 30);
+      } catch (e) {
+        console.warn('P2P映像送出の初期化に失敗:', e);
+      }
+      // リモート映像を受信したらvideoに表示
+      this.webrtc.onRemoteStream = (stream) => {
+        this.peerVideoEl.srcObject = stream;
+        this.peerVideoEl.style.display = 'block';
+      };
       this.showTitleScreen();
     } else {
       this.loadingDiv.textContent = 'Failed to load assets!';
@@ -653,6 +670,88 @@ class TowerDefenseGame {
           this.engine.togglePause();
         }
       }
+    });
+  }
+
+  /**
+   * WebRTC 接続UIのセットアップ
+   */
+  setupWebRTCControls() {
+    const panel = document.getElementById('webrtc-panel');
+    const toggle = document.getElementById('webrtc-toggle');
+    const btnCreateOffer = document.getElementById('btn-create-offer');
+    const btnCreateAnswer = document.getElementById('btn-create-answer');
+    const btnAcceptOffer = document.getElementById('btn-accept-offer');
+    const btnAcceptAnswer = document.getElementById('btn-accept-answer');
+    const btnStop = document.getElementById('btn-stop');
+    const offerOut = document.getElementById('offer-sdp');
+    const answerOut = document.getElementById('answer-sdp');
+    const offerIn = document.getElementById('remote-offer');
+    const answerIn = document.getElementById('remote-answer');
+
+    toggle.addEventListener('click', () => {
+      const open = panel.classList.toggle('open');
+      toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+    });
+
+    btnCreateOffer.addEventListener('click', async () => {
+      try {
+        const sdp = await this.webrtc.createOffer();
+        offerOut.value = sdp;
+      } catch (e) {
+        alert('Offer生成に失敗しました: ' + e.message);
+      }
+    });
+
+    btnCreateAnswer.addEventListener('click', async () => {
+      try {
+        const remoteOffer = offerIn.value.trim();
+        if (!remoteOffer) {
+          alert('相手のOfferを貼り付けてください');
+          return;
+        }
+        const sdp = await this.webrtc.acceptOfferAndCreateAnswer(remoteOffer);
+        answerOut.value = sdp;
+      } catch (e) {
+        alert('Answer生成に失敗しました: ' + e.message);
+      }
+    });
+
+    btnAcceptOffer.addEventListener('click', async () => {
+      try {
+        const remoteOffer = offerIn.value.trim();
+        if (!remoteOffer) {
+          alert('相手のOfferを貼り付けてください');
+          return;
+        }
+        const sdp = await this.webrtc.acceptOfferAndCreateAnswer(remoteOffer);
+        answerOut.value = sdp;
+        alert('Offerを適用し、Answerを生成しました。Answerを相手に送ってください。');
+      } catch (e) {
+        alert('Offer適用に失敗しました: ' + e.message);
+      }
+    });
+
+    btnAcceptAnswer.addEventListener('click', async () => {
+      try {
+        const remoteAnswer = answerIn.value.trim();
+        if (!remoteAnswer) {
+          alert('相手のAnswerを貼り付けてください');
+          return;
+        }
+        await this.webrtc.acceptAnswer(remoteAnswer);
+        alert('Answerを適用しました。P2P接続が確立されるまで数秒お待ちください。');
+      } catch (e) {
+        alert('Answer適用に失敗しました: ' + e.message);
+      }
+    });
+
+    btnStop.addEventListener('click', () => {
+      try {
+        this.webrtc.stop();
+        this.peerVideoEl.srcObject = null;
+        this.peerVideoEl.style.display = 'none';
+      } catch {}
     });
   }
 }
