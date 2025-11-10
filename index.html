@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="ja">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -60,15 +61,136 @@
     .hidden {
       display: none;
     }
+
+    /* ===== WebRTC 接続UI ===== */
+    #webrtc-panel {
+      position: absolute;
+      right: -360px;
+      /* 画面外に格納（トグルで表示） */
+      top: 0;
+      width: 340px;
+      height: 100%;
+      background: rgba(15, 52, 96, 0.98);
+      border-left: 2px solid #0f3460;
+      padding: 12px;
+      transition: right 0.25s ease;
+      overflow-y: auto;
+      z-index: 20;
+    }
+
+    #webrtc-panel.open {
+      right: 0;
+    }
+
+    #webrtc-toggle {
+      position: absolute;
+      right: 0;
+      top: 0;
+      transform: translateX(100%);
+      background: #0f3460;
+      color: #fff;
+      border: none;
+      padding: 8px 10px;
+      cursor: pointer;
+      z-index: 21;
+    }
+
+    #webrtc-panel h2 {
+      font-size: 16px;
+      margin-bottom: 8px;
+      color: #4ecca3;
+    }
+
+    #webrtc-panel textarea {
+      width: 100%;
+      min-height: 90px;
+      background: #16213e;
+      color: #eee;
+      border: 1px solid #0f3460;
+      padding: 6px;
+      resize: vertical;
+      font-family: monospace;
+      font-size: 12px;
+    }
+
+    #webrtc-panel .row {
+      margin-bottom: 10px;
+    }
+
+    #webrtc-panel button {
+      background: #4ecca3;
+      color: #000;
+      border: none;
+      padding: 8px 10px;
+      cursor: pointer;
+      font-weight: bold;
+      margin-right: 6px;
+    }
+
+    /* 相手映像（サイドバー上部に重ねて配置） */
+    #peer-video {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      width: 184px;
+      /* サイドバー幅(200) - 余白 */
+      height: 138px;
+      background: #000;
+      border: 2px solid #4ecca3;
+      z-index: 10;
+      object-fit: cover;
+      display: none;
+      /* 接続後に表示 */
+    }
   </style>
 </head>
+
 <body>
   <div id="game-container">
     <h1 class="sr-only">Tower Defense Game</h1>
     <canvas id="game-canvas"></canvas>
     <div id="loading">Loading...</div>
+
+    <!-- 相手プレイヤー映像 -->
+    <video id="peer-video" autoplay playsinline></video>
+
+    <!-- WebRTC 接続パネル -->
+    <div id="webrtc-panel" aria-label="P2P接続コントロール">
+      <button id="webrtc-toggle" aria-expanded="false">P2P</button>
+      <h2>P2P 接続（WebRTC 手動シグナリング）</h2>
+      <div class="row">
+        <button id="btn-create-offer">ホスト（Offer生成）</button>
+        <button id="btn-create-answer">参加（Answer生成）</button>
+      </div>
+      <div class="row">
+        <label for="offer-sdp">Offer（コピーして相手へ送信）</label>
+        <textarea id="offer-sdp" placeholder="ここにOfferが表示されます"></textarea>
+      </div>
+      <div class="row">
+        <label for="remote-offer">相手のOfferを貼り付け（参加側）</label>
+        <textarea id="remote-offer" placeholder="相手のOffer SDPを貼り付け"></textarea>
+        <button id="btn-accept-offer">Offerを適用</button>
+      </div>
+      <div class="row">
+        <label for="answer-sdp">Answer（コピーして相手へ送信）</label>
+        <textarea id="answer-sdp" placeholder="ここにAnswerが表示されます"></textarea>
+      </div>
+      <div class="row">
+        <label for="remote-answer">相手のAnswerを貼り付け（ホスト側）</label>
+        <textarea id="remote-answer" placeholder="相手のAnswer SDPを貼り付け"></textarea>
+        <button id="btn-accept-answer">Answerを適用</button>
+      </div>
+      <div class="row">
+        <button id="btn-stop">切断</button>
+      </div>
+      <div class="row" style="color:#aaa; font-size:12px;">
+        STUN: Google Public STUN を使用。ポート開放不要。通信はブラウザ同士のP2Pです。<br />
+        注意: 手動でSDPを交換する必要があります（チャット等で共有）。
+      </div>
+    </div>
   </div>
 
   <script type="module" src="./src/main.js"></script>
 </body>
+
 </html>
