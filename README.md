@@ -294,6 +294,12 @@ export const path = [
 ];
 ```
 
+## 🎨 アセットについて
+
+- キャラクター画像は ChatGPT と Google AI Studio（Nano-banana）で生成しています。
+- 効果音（SE）は `https://soundeffect-lab.info/` からダウンロードして使用しています。
+- BGM は Suno AI でオリジナル楽曲を生成しています。
+
 ## 📄 ライセンス
 
 このプロジェクトは学習・セミナー用途で作成されています。

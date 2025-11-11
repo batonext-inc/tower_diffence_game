@@ -96,11 +96,12 @@ export function canBuildOnTile(tileX, tileY) {
  * マップクラス
  */
 export class GameMap {
-  constructor() {
+  constructor(yOffset = 0) {
     this.tiles = map10x10;
     this.path = path;
     this.start = start;
     this.goal = goal;
+    this.yOffset = yOffset; // Y座標オフセット（上部バーの高さ）
   }
 
   /**
@@ -111,7 +112,7 @@ export class GameMap {
     for (let row = 0; row < GRID_ROWS; row++) {
       for (let col = 0; col < GRID_COLS; col++) {
         const x = col * TILE_SIZE;
-        const y = row * TILE_SIZE;
+        const y = row * TILE_SIZE + this.yOffset;
         const tileType = this.tiles[row][col];
 
         // タイルの色分け
@@ -136,18 +137,28 @@ export class GameMap {
     }
 
     // スタート位置マーカー
-    const startWorld = tileToWorld(this.start.x, this.start.y);
+    const startWorld = this.tileToWorldWithOffset(this.start.x, this.start.y);
     renderer.drawCircle(startWorld.x, startWorld.y, 10, '#00ff00', true);
 
     // ゴール位置マーカー
-    const goalWorld = tileToWorld(this.goal.x, this.goal.y);
+    const goalWorld = this.tileToWorldWithOffset(this.goal.x, this.goal.y);
     renderer.drawCircle(goalWorld.x, goalWorld.y, 10, '#ff0000', true);
   }
 
   /**
-   * パスの総ワールド座標を取得
+   * オフセット付きでタイル座標をワールド座標に変換
+   */
+  tileToWorldWithOffset(tileX, tileY) {
+    return {
+      x: tileX * TILE_SIZE + TILE_SIZE / 2,
+      y: tileY * TILE_SIZE + TILE_SIZE / 2 + this.yOffset
+    };
+  }
+
+  /**
+   * パスの総ワールド座標を取得（オフセット適用）
    */
   getPathWorldCoordinates() {
-    return this.path.map(p => tileToWorld(p.x, p.y));
+    return this.path.map(p => this.tileToWorldWithOffset(p.x, p.y));
   }
 }
