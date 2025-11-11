@@ -16,19 +16,24 @@ export class UI {
   /**
    * 上部情報バーを描画（旧サイドバー）
    */
-  renderTopbar(renderer, economy, base, stageManager, waveManager, gameSpeed) {
+  renderTopbar(renderer, economy, base, stageManager, waveManager, gameSpeed, totalPlayTime) {
     const topbarY = 0;
 
     // 背景
     renderer.drawRect(0, topbarY, this.canvas.width, this.topbarHeight, 'rgba(0,0,0,0.9)', true);
 
-    // 左側:ゴールドとBase HP
+    // 左側:ゴールドとタイマー
     const leftX = 80;
     renderer.drawText('Gold', leftX, 25, 16, '#ffd93d', 'center');
     renderer.drawText(`${economy.getGold()}G`, leftX, 45, 20, '#ffffff', 'center');
 
-    renderer.drawText('Base HP', leftX, 75, 16, '#e74c3c', 'center');
-    renderer.drawText(`${base.hp}/${base.maxHp}`, leftX, 95, 20, '#ffffff', 'center');
+    // タイマー表示（Base HPの位置）
+    renderer.drawText('Time', leftX, 75, 16, '#4ecca3', 'center');
+    const minutes = Math.floor(totalPlayTime / 60);
+    const seconds = Math.floor(totalPlayTime % 60);
+    const milliseconds = Math.floor((totalPlayTime % 1) * 100);
+    const timeText = `${minutes}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(2, '0')}`;
+    renderer.drawText(timeText, leftX, 95, 18, '#ffffff', 'center');
 
     // 中央：ステージとウェーブ
     const centerX = this.canvas.width / 2;
@@ -36,7 +41,7 @@ export class UI {
 
     const currentWave = waveManager.getCurrentWaveNumber();
     const totalWaves = waveManager.getTotalWaves();
-    renderer.drawText(`Stage ${stageManager.getCurrentStageNumber()}  Wave ${currentWave}/${totalWaves}`,
+    renderer.drawText(`Stage ${stageManager.getCurrentStageNumber()}/5  Wave ${currentWave}/${totalWaves}`,
       centerX, 75, 18, '#ffffff', 'center');
 
     // 速度変更ボタン（右側）
@@ -51,9 +56,9 @@ export class UI {
     renderer.ctx.strokeRect(speedButtonX, speedButtonY, speedButtonWidth, speedButtonHeight);
 
     let speedText = '';
-    if (gameSpeed === 0.5) speedText = '速度: ×1';
-    else if (gameSpeed === 1.0) speedText = '速度: ×2';
-    else if (gameSpeed === 2.0) speedText = '速度: ×4';
+    if (gameSpeed === 1.0) speedText = '速度: ×1';
+    else if (gameSpeed === 2.0) speedText = '速度: ×2';
+    else if (gameSpeed === 4.0) speedText = '速度: ×4';
     renderer.drawText(speedText, speedButtonX + speedButtonWidth / 2, speedButtonY + speedButtonHeight / 2 + 5, 18, '#ffffff', 'center');
   }
 
@@ -191,7 +196,7 @@ export class UI {
   /**
    * 全ステージクリア画面
    */
-  renderAllClear(renderer) {
+  renderAllClear(renderer, totalPlayTime) {
     const centerX = this.canvas.width / 2;
     const centerY = this.canvas.height / 2;
 
@@ -204,11 +209,18 @@ export class UI {
     renderer.drawText('全ステージクリア！', centerX, centerY - 30, 32, '#4ecca3', 'center');
     renderer.drawText('おめでとうございます！', centerX, centerY + 10, 24, '#ffffff', 'center');
 
+    // クリアタイム表示
+    const minutes = Math.floor(totalPlayTime / 60);
+    const seconds = Math.floor(totalPlayTime % 60);
+    const milliseconds = Math.floor((totalPlayTime % 1) * 100);
+    const timeText = `${minutes}:${seconds.toString().padStart(2, '0')}.${milliseconds.toString().padStart(2, '0')}`;
+    renderer.drawText(`Clear Time: ${timeText}`, centerX, centerY + 50, 28, '#4ecca3', 'center');
+
     // リスタートボタン
     const buttonWidth = 200;
     const buttonHeight = 50;
     const buttonX = centerX - buttonWidth / 2;
-    const buttonY = centerY + 70;
+    const buttonY = centerY + 100;
 
     renderer.drawRect(buttonX, buttonY, buttonWidth, buttonHeight, '#ffd93d', true);
     renderer.ctx.strokeStyle = '#ffffff';
@@ -336,7 +348,7 @@ export class UI {
     const buttonHeight = 50;
     return {
       x: centerX - buttonWidth / 2,
-      y: centerY + 70, // renderAllClearと一致させる
+      y: centerY + 100, // renderAllClearと一致させる
       width: buttonWidth,
       height: buttonHeight
     };

@@ -7,7 +7,7 @@ export class GameEngine {
     this.lastTime = 0;
     this.deltaTime = 0;
     this.isPaused = false;
-    this.gameSpeed = 0.5; // 0.5 = デフォルト速度, 1.0 = 通常速度, 2.0 = 2倍速
+    this.gameSpeed = 1.0; // 1.0 = 通常速度, 2.0 = 2倍速, 4.0 = 4倍速
     this.currentScene = null;
   }
 
