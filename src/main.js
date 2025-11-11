@@ -22,6 +22,7 @@ import { SaveManager } from './game/save.js';
 const GAME_STATE = {
   LOADING: 'loading',
   TITLE: 'title',
+  RULES: 'rules',
   PLAYING: 'playing',
   PAUSED: 'paused',
   GAME_OVER: 'gameOver',
@@ -76,6 +77,13 @@ class TowerDefenseGame {
     this.soundsLoaded = false;
     this.soundLoadingPromise = null;
     this.isStartingGame = false;
+
+    // ルール説明画面のページ管理
+    this.rulesPage = 1; // 1: ルール説明、2: タワー・敵情報
+
+    // タイムアタック用タイマー
+    this.totalPlayTime = 0; // 累積プレイ時間（秒）
+    this.isTimerRunning = false; // タイマー稼働中フラグ
 
     // ゲームシステム初期化
     this.gameMap = new GameMap(this.topbarHeight); // Y座標オフセットを渡す
@@ -157,6 +165,9 @@ class TowerDefenseGame {
   async init() {
     // アセット読み込み
     const imageList = [
+      // サムネイル
+      { key: 'thumbnail', path: './public/assets/sprites/thmbnail.png' },
+
       // 敵
       { key: 'enemy_slime', path: './public/assets/sprites/enemy/slime.png' },
       { key: 'enemy_goblin', path: './public/assets/sprites/enemy/goblin.png' },
@@ -267,6 +278,10 @@ class TowerDefenseGame {
       // 最初のウェーブを開始
       this.waveManager.startNextWave();
 
+      // タイマーをリセットして開始
+      this.totalPlayTime = 0;
+      this.isTimerRunning = true;
+
       // ゲーム状態を変更
       this.gameState = GAME_STATE.PLAYING;
     } finally {
@@ -279,6 +294,11 @@ class TowerDefenseGame {
    */
   update(deltaTime) {
     if (this.gameState !== GAME_STATE.PLAYING) return;
+
+    // タイマー更新（Wave待機中でない場合のみ）
+    if (this.isTimerRunning && !this.waveManager.isWaitingForNextWave()) {
+      this.totalPlayTime += deltaTime;
+    }
 
     // ウェーブ管理
     this.waveManager.update(deltaTime, this.enemies);
@@ -317,6 +337,9 @@ class TowerDefenseGame {
 
     // 基地が破壊されたらゲームオーバー
     if (!this.base.alive && this.gameState !== GAME_STATE.GAME_OVER) {
+      // タイマーを停止
+      this.isTimerRunning = false;
+
       // BGMを停止してゲームオーバー音楽を再生
       this.assetLoader.stopBGM();
       this.assetLoader.playSound('sfx_game_over', 0.6, false);
@@ -343,6 +366,12 @@ class TowerDefenseGame {
     // タイトル画面
     if (this.gameState === GAME_STATE.TITLE) {
       this.renderTitleScreen();
+      return;
+    }
+
+    // ルール説明画面
+    if (this.gameState === GAME_STATE.RULES) {
+      this.renderRulesScreen();
       return;
     }
 
@@ -377,7 +406,7 @@ class TowerDefenseGame {
     // UI描画
     if (this.base) {
       // 上部情報バー（ゲーム情報）
-      this.ui.renderTopbar(this.renderer, this.economy, this.base, this.stageManager, this.waveManager, this.engine.gameSpeed);
+      this.ui.renderTopbar(this.renderer, this.economy, this.base, this.stageManager, this.waveManager, this.engine.gameSpeed, this.totalPlayTime);
 
       // 下部HUD（タワー選択）
       this.ui.renderHUD(this.renderer, TOWER_TYPES, this.assetLoader);
@@ -465,7 +494,7 @@ class TowerDefenseGame {
       const bonusGold = this.stageManager.getCurrentStageData().clearBonusGold;
       this.ui.renderStageClear(this.renderer, bonusGold);
     } else if (this.gameState === GAME_STATE.ALL_CLEAR) {
-      this.ui.renderAllClear(this.renderer);
+      this.ui.renderAllClear(this.renderer, this.totalPlayTime);
     }
   }
 
@@ -474,26 +503,25 @@ class TowerDefenseGame {
    */
   renderTitleScreen() {
     const centerX = this.canvas.width / 2;
-    const centerY = this.canvas.height / 2;
 
     // 背景を暗くする
     this.renderer.drawRect(0, 0, this.canvas.width, this.canvas.height, 'rgba(0,0,0,0.8)', true);
 
-    // タイトル
-    this.renderer.drawText('TOWER DEFENSE', centerX, centerY - 200, 48, '#4ecca3', 'center');
-
-    // サブタイトル
-    this.renderer.drawText('基地を守り抜け！', centerX, centerY - 150, 24, '#ffffff', 'center');
-
-    // タワー情報表示
-    this.renderTowerInfo();
+    // サムネイル画像を表示（横幅90%）
+    const thumbnail = this.assetLoader.getImage('thumbnail');
+    if (thumbnail) {
+      const thumbnailWidth = this.canvas.width * 0.9; // 横幅90%
+      const thumbnailHeight = thumbnailWidth; // 正方形
+      const thumbnailY = 80;
+      this.renderer.drawImage(thumbnail, centerX, thumbnailY + thumbnailHeight / 2, thumbnailWidth, thumbnailHeight, true);
+    }
 
     // 開始ボタン（音ありと音なし）
     const buttonWidth = 180;
     const buttonHeight = 50;
     const buttonSpacing = 20;
     const totalWidth = buttonWidth * 2 + buttonSpacing;
-    const buttonY = centerY + 160;
+    const buttonY = 680;
 
     // 音ありボタン（左）
     const withSoundX = centerX - totalWidth / 2;
@@ -511,55 +539,247 @@ class TowerDefenseGame {
     this.renderer.ctx.strokeRect(withoutSoundX, buttonY, buttonWidth, buttonHeight);
     this.renderer.drawText('音なしで開始', withoutSoundX + buttonWidth / 2, buttonY + buttonHeight / 2 + 8, 20, '#ffffff', 'center');
 
-    // 操作説明
-    this.renderer.drawText('操作方法:', centerX, centerY + 240, 20, '#aaaaaa', 'center');
-    this.renderer.drawText('クリック: タワー建設/レベルアップ', centerX, centerY + 265, 16, '#888888', 'center');
-    this.renderer.drawText('速度ボタン: ゲーム速度変更 (×1/×2/×4)', centerX, centerY + 285, 16, '#888888', 'center');
+    // ルール説明ボタン
+    const rulesButtonWidth = 160;
+    const rulesButtonHeight = 40;
+    const rulesButtonX = centerX - rulesButtonWidth / 2;
+    const rulesButtonY = buttonY + buttonHeight + 15;
+    this.renderer.drawRect(rulesButtonX, rulesButtonY, rulesButtonWidth, rulesButtonHeight, 'rgba(100, 100, 200, 0.6)', true);
+    this.renderer.ctx.strokeStyle = '#aaaaaa';
+    this.renderer.ctx.lineWidth = 2;
+    this.renderer.ctx.strokeRect(rulesButtonX, rulesButtonY, rulesButtonWidth, rulesButtonHeight);
+    this.renderer.drawText('ルール説明', rulesButtonX + rulesButtonWidth / 2, rulesButtonY + rulesButtonHeight / 2 + 6, 18, '#ffffff', 'center');
 
     // クレジット
     this.renderer.drawText('Tower Defense Game v1.0', centerX, this.canvas.height - 30, 14, '#666666', 'center');
   }
 
   /**
-   * タワー情報を表示
+   * ルール説明画面を描画
    */
-  renderTowerInfo() {
+  renderRulesScreen() {
+    if (this.rulesPage === 1) {
+      this.renderRulesPage1();
+    } else {
+      this.renderRulesPage2();
+    }
+  }
+
+  /**
+   * ルール説明画面 - ページ1（基本ルール）
+   */
+  renderRulesPage1() {
     const centerX = this.canvas.width / 2;
-    const centerY = this.canvas.height / 2;
+
+    // 背景を暗くする
+    this.renderer.drawRect(0, 0, this.canvas.width, this.canvas.height, 'rgba(0,0,0,0.9)', true);
+
+    // タイトル
+    this.renderer.drawText('ゲームルール (1/2)', centerX, 50, 32, '#4ecca3', 'center');
+
+    // ルール説明（左寄せで見やすく）
+    const leftX = 40;
+    let currentY = 100;
+    const lineHeight = 24;
+
+    // ゲーム目的
+    this.renderer.drawText('【目的】', leftX, currentY, 18, '#ffd93d', 'left');
+    currentY += lineHeight + 3;
+    this.renderer.drawText('・画面中央下の基地（タワー）を守り、全5ステージクリアを目指す', leftX + 10, currentY, 15, '#ffffff', 'left');
+    currentY += lineHeight;
+    this.renderer.drawText('・基地のHPが0になるとゲームオーバー', leftX + 10, currentY, 15, '#ffffff', 'left');
+    currentY += lineHeight + 8;
+
+    // タワー建設
+    this.renderer.drawText('【タワー建設】', leftX, currentY, 18, '#ffd93d', 'left');
+    currentY += lineHeight + 3;
+    this.renderer.drawText('・ゴールドを消費して、マップ上にタワーを建設できる', leftX + 10, currentY, 15, '#ffffff', 'left');
+    currentY += lineHeight;
+    this.renderer.drawText('・パス（敵の通り道）には建設不可', leftX + 10, currentY, 15, '#ffffff', 'left');
+    currentY += lineHeight;
+    this.renderer.drawText('・タワーは自動で範囲内の敵を攻撃する', leftX + 10, currentY, 15, '#ffffff', 'left');
+    currentY += lineHeight + 8;
+
+    // タワーの種類
+    this.renderer.drawText('【タワーの種類】', leftX, currentY, 18, '#ffd93d', 'left');
+    currentY += lineHeight + 3;
+    this.renderer.drawText('・剣士: 近距離・高威力（コスト30G）', leftX + 10, currentY, 15, '#ffffff', 'left');
+    currentY += lineHeight;
+    this.renderer.drawText('・アーチャー: 遠距離・連射（コスト40G）', leftX + 10, currentY, 15, '#ffffff', 'left');
+    currentY += lineHeight;
+    this.renderer.drawText('  ※詳細は次ページで確認', leftX + 10, currentY, 14, '#aaaaaa', 'left');
+    currentY += lineHeight + 8;
+
+    // レベルアップ
+    this.renderer.drawText('【レベルアップ】', leftX, currentY, 18, '#ffd93d', 'left');
+    currentY += lineHeight + 3;
+    this.renderer.drawText('・建設済みタワーをクリックするとレベルアップ可能', leftX + 10, currentY, 15, '#ffffff', 'left');
+    currentY += lineHeight;
+    this.renderer.drawText('・レベルアップでダメージが1.4倍に強化される', leftX + 10, currentY, 15, '#ffffff', 'left');
+    currentY += lineHeight + 8;
+
+    // ゴールド獲得
+    this.renderer.drawText('【ゴールド獲得】', leftX, currentY, 18, '#ffd93d', 'left');
+    currentY += lineHeight + 3;
+    this.renderer.drawText('・敵を倒すとゴールドを獲得できる', leftX + 10, currentY, 15, '#ffffff', 'left');
+    currentY += lineHeight;
+    this.renderer.drawText('・ステージクリアでボーナスゴールドを獲得', leftX + 10, currentY, 15, '#ffffff', 'left');
+    currentY += lineHeight;
+    this.renderer.drawText('・ゴールドは次ステージに引き継がれる', leftX + 10, currentY, 15, '#ffffff', 'left');
+    currentY += lineHeight + 8;
+
+    // 操作方法
+    this.renderer.drawText('【操作方法】', leftX, currentY, 18, '#ffd93d', 'left');
+    currentY += lineHeight + 3;
+    this.renderer.drawText('・マウスクリック: タワー建設/レベルアップ', leftX + 10, currentY, 15, '#ffffff', 'left');
+    currentY += lineHeight;
+    this.renderer.drawText('・速度ボタン: ゲーム速度を変更（×1/×2/×4）', leftX + 10, currentY, 15, '#ffffff', 'left');
+
+    // 下部ボタン
+    this.renderRulesPageButtons();
+  }
+
+  /**
+   * ルール説明画面 - ページ2（タワー・敵詳細）
+   */
+  renderRulesPage2() {
+    const centerX = this.canvas.width / 2;
+
+    // 背景を暗くする
+    this.renderer.drawRect(0, 0, this.canvas.width, this.canvas.height, 'rgba(0,0,0,0.9)', true);
+
+    // タイトル
+    this.renderer.drawText('タワー・敵図鑑 (2/2)', centerX, 50, 32, '#4ecca3', 'center');
+
+    // タワー情報
+    this.renderer.drawText('【タワー】', 40, 100, 24, '#ffd93d', 'left');
+
+    // タワーを横4体に配置（左詰め）
     const towerOrder = ['solder', 'archer'];
+    const towerStartX = 80;
+    const towerSpacing = 150;
+    const towerY = 140;
 
     towerOrder.forEach((towerKey, index) => {
       const towerType = TOWER_TYPES[towerKey];
-      const xOffset = (index === 0 ? -120 : 120); // 剣士は左、アーチャーは右
-      const x = centerX + xOffset;
-      const y = centerY - 20;
+      const x = towerStartX + index * towerSpacing;
 
-      // タワー画像
+      // タワー画像（大きく）
       const spriteKey = towerKey === 'solder' ? `tower_${towerKey}_d` : `tower_${towerKey}_rd`;
       const img = this.assetLoader.getImage(spriteKey);
       if (img) {
-        this.renderer.drawImage(img, x, y - 40, 64, 64, true);
+        this.renderer.drawImage(img, x, towerY, 80, 80, true);
       }
 
-      // タワー名
+      // タワー名（大きく）
       const towerName = towerKey === 'solder' ? '剣士' : 'アーチャー';
-      this.renderer.drawText(towerName, x, y + 45, 20, '#ffd93d', 'center');
+      this.renderer.drawText(towerName, x, towerY + 60, 22, '#ffd93d', 'center');
 
-      // ステータス表示
+      // ステータス表示（大きく）
       const stats = [
         `コスト: ${towerType.cost}G`,
         `ダメージ: ${towerType.damage}`,
-        `射程: 半径${Math.round(towerType.range / 100)}マス`,
-        `連射速度: ${towerType.fireRate.toFixed(1)}/s`
+        `射程: ${Math.round(towerType.range / 64)}マス`,
+        `連射: ${towerType.fireRate.toFixed(1)}/s`
       ];
 
       stats.forEach((stat, i) => {
-        this.renderer.drawText(stat, x, y + 70 + i * 20, 16, '#cccccc', 'center');
+        this.renderer.drawText(stat, x, towerY + 88 + i * 20, 15, '#cccccc', 'center');
       });
     });
 
-    // レベルアップ効果の説明を追加
-    this.renderer.drawText('レベルアップ: ダメージ×1.4倍', centerX, centerY + 140, 16, '#4ecca3', 'center');
+    // 敵情報
+    this.renderer.drawText('【敵】', 40, 340, 24, '#ffd93d', 'left');
+
+    // 敵データ（enemy.jsの正しいHP値を使用）
+    const enemyData = [
+      { key: 'enemy_slime', name: 'スライム', hp: 35, speed: '普通' },
+      { key: 'enemy_goblin', name: 'ゴブリン', hp: 50, speed: '速い' },
+      { key: 'enemy_thief', name: '盗賊', hp: 70, speed: '高速' },
+      { key: 'enemy_golem', name: 'ゴーレム', hp: 600, speed: '低速' },
+      { key: 'enemy_demon_king', name: '魔王', hp: 2200, speed: '普通' }
+    ];
+
+    // 敵を横4体、2行に配置（左詰め）
+    const enemyStartX = 80;
+    const enemySpacing = 150;
+    const enemyStartY = 390;
+    const enemyRowSpacing = 130;
+
+    enemyData.forEach((enemy, index) => {
+      const row = Math.floor(index / 4);
+      const col = index % 4;
+      const x = enemyStartX + col * enemySpacing;
+      const y = enemyStartY + row * enemyRowSpacing;
+
+      // 敵画像（大きく）
+      const img = this.assetLoader.getImage(enemy.key);
+      if (img) {
+        this.renderer.drawImage(img, x, y, 60, 60, true);
+      }
+
+      // 敵名（大きく）
+      this.renderer.drawText(enemy.name, x, y + 45, 16, '#ffd93d', 'center');
+
+      // HP表示（大きく）
+      this.renderer.drawText(`HP: ${enemy.hp}`, x, y + 65, 14, '#cccccc', 'center');
+      this.renderer.drawText(enemy.speed, x, y + 82, 13, '#aaaaaa', 'center');
+    });
+
+    // 下部ボタン
+    this.renderRulesPageButtons();
+  }
+
+  /**
+   * ルール説明画面のボタン（共通）
+   */
+  renderRulesPageButtons() {
+    const centerX = this.canvas.width / 2;
+    const buttonY = this.canvas.height - 70;
+    const buttonHeight = 40;
+    const buttonWidth = 120;
+
+    if (this.rulesPage === 1) {
+      // 中央:タイトルへボタン
+      const backButtonX = centerX - buttonWidth / 2;
+      this.renderer.drawRect(backButtonX, buttonY, buttonWidth, buttonHeight, '#4ecca3', true);
+      this.renderer.ctx.strokeStyle = '#ffffff';
+      this.renderer.ctx.lineWidth = 2;
+      this.renderer.ctx.strokeRect(backButtonX, buttonY, buttonWidth, buttonHeight);
+      this.renderer.drawText('タイトルへ', backButtonX + buttonWidth / 2, buttonY + buttonHeight / 2 + 6, 18, '#ffffff', 'center');
+
+      // 右:次へボタン
+      const nextButtonX = this.canvas.width - buttonWidth - 40;
+      this.renderer.drawRect(nextButtonX, buttonY, buttonWidth, buttonHeight, 'rgba(100, 100, 200, 0.8)', true);
+      this.renderer.ctx.strokeStyle = '#ffffff';
+      this.renderer.ctx.lineWidth = 2;
+      this.renderer.ctx.strokeRect(nextButtonX, buttonY, buttonWidth, buttonHeight);
+      this.renderer.drawText('次へ ▶', nextButtonX + buttonWidth / 2, buttonY + buttonHeight / 2 + 6, 18, '#ffffff', 'center');
+    } else {
+      // 左:前へボタン
+      const prevButtonX = 40;
+      this.renderer.drawRect(prevButtonX, buttonY, buttonWidth, buttonHeight, 'rgba(100, 100, 200, 0.8)', true);
+      this.renderer.ctx.strokeStyle = '#ffffff';
+      this.renderer.ctx.lineWidth = 2;
+      this.renderer.ctx.strokeRect(prevButtonX, buttonY, buttonWidth, buttonHeight);
+      this.renderer.drawText('◀ 前へ', prevButtonX + buttonWidth / 2, buttonY + buttonHeight / 2 + 6, 18, '#ffffff', 'center');
+
+      // 中央:タイトルへボタン
+      const backButtonX = centerX - buttonWidth / 2;
+      this.renderer.drawRect(backButtonX, buttonY, buttonWidth, buttonHeight, '#4ecca3', true);
+      this.renderer.ctx.strokeStyle = '#ffffff';
+      this.renderer.ctx.lineWidth = 2;
+      this.renderer.ctx.strokeRect(backButtonX, buttonY, buttonWidth, buttonHeight);
+      this.renderer.drawText('タイトルへ', backButtonX + buttonWidth / 2, buttonY + buttonHeight / 2 + 6, 18, '#ffffff', 'center');
+
+      // 右:次へボタン（無効化）
+      const nextButtonX = this.canvas.width - buttonWidth - 40;
+      this.renderer.drawRect(nextButtonX, buttonY, buttonWidth, buttonHeight, 'rgba(80, 80, 80, 0.5)', true);
+      this.renderer.ctx.strokeStyle = '#666666';
+      this.renderer.ctx.lineWidth = 2;
+      this.renderer.ctx.strokeRect(nextButtonX, buttonY, buttonWidth, buttonHeight);
+      this.renderer.drawText('次へ ▶', nextButtonX + buttonWidth / 2, buttonY + buttonHeight / 2 + 6, 18, '#666666', 'center');
+    }
   }
 
   /**
@@ -570,12 +790,11 @@ class TowerDefenseGame {
       // タイトル画面でクリックしたらゲーム開始（音ありor音なし判定）
       if (this.gameState === GAME_STATE.TITLE) {
         const centerX = this.canvas.width / 2;
-        const centerY = this.canvas.height / 2;
         const buttonWidth = 180;
         const buttonHeight = 50;
         const buttonSpacing = 20;
         const totalWidth = buttonWidth * 2 + buttonSpacing;
-        const buttonY = centerY + 160;
+        const buttonY = 680;
 
         // 音ありボタン
         const withSoundX = centerX - totalWidth / 2;
@@ -592,6 +811,64 @@ class TowerDefenseGame {
           // 音なしなのでクリック音は鳴らさない
           this.startGame(false); // 音なしで開始
           return;
+        }
+
+        // ルール説明ボタン
+        const rulesButtonWidth = 160;
+        const rulesButtonHeight = 40;
+        const rulesButtonX = centerX - rulesButtonWidth / 2;
+        const rulesButtonY = buttonY + buttonHeight + 15;
+        if (pos.x >= rulesButtonX && pos.x <= rulesButtonX + rulesButtonWidth &&
+            pos.y >= rulesButtonY && pos.y <= rulesButtonY + rulesButtonHeight) {
+          this.rulesPage = 1; // ページ1から開始
+          this.gameState = GAME_STATE.RULES;
+          return;
+        }
+
+        return;
+      }
+
+      // ルール説明画面:ボタン処理
+      if (this.gameState === GAME_STATE.RULES) {
+        const centerX = this.canvas.width / 2;
+        const buttonY = this.canvas.height - 70;
+        const buttonHeight = 40;
+        const buttonWidth = 120;
+
+        if (this.rulesPage === 1) {
+          // 中央:タイトルへボタン
+          const backButtonX = centerX - buttonWidth / 2;
+          if (pos.x >= backButtonX && pos.x <= backButtonX + buttonWidth &&
+              pos.y >= buttonY && pos.y <= buttonY + buttonHeight) {
+            this.rulesPage = 1;
+            this.gameState = GAME_STATE.TITLE;
+            return;
+          }
+
+          // 右:次へボタン
+          const nextButtonX = this.canvas.width - buttonWidth - 40;
+          if (pos.x >= nextButtonX && pos.x <= nextButtonX + buttonWidth &&
+              pos.y >= buttonY && pos.y <= buttonY + buttonHeight) {
+            this.rulesPage = 2;
+            return;
+          }
+        } else {
+          // 左:前へボタン
+          const prevButtonX = 40;
+          if (pos.x >= prevButtonX && pos.x <= prevButtonX + buttonWidth &&
+              pos.y >= buttonY && pos.y <= buttonY + buttonHeight) {
+            this.rulesPage = 1;
+            return;
+          }
+
+          // 中央:タイトルへボタン
+          const backButtonX = centerX - buttonWidth / 2;
+          if (pos.x >= backButtonX && pos.x <= backButtonX + buttonWidth &&
+              pos.y >= buttonY && pos.y <= buttonY + buttonHeight) {
+            this.rulesPage = 1;
+            this.gameState = GAME_STATE.TITLE;
+            return;
+          }
         }
 
         return;
@@ -757,15 +1034,15 @@ class TowerDefenseGame {
   }
 
   /**
-   * ゲームスピードを切り替え (0.5 → 1.0 → 2.0 → 0.5...)
+   * ゲームスピードを切り替え (1.0 → 2.0 → 4.0 → 1.0...)
    */
   toggleSpeed() {
-    if (this.engine.gameSpeed === 0.5) {
-      this.engine.setGameSpeed(1.0);
-    } else if (this.engine.gameSpeed === 1.0) {
+    if (this.engine.gameSpeed === 1.0) {
       this.engine.setGameSpeed(2.0);
+    } else if (this.engine.gameSpeed === 2.0) {
+      this.engine.setGameSpeed(4.0);
     } else {
-      this.engine.setGameSpeed(0.5);
+      this.engine.setGameSpeed(1.0);
     }
 
     // 速度変更効果音を再生
@@ -778,6 +1055,9 @@ class TowerDefenseGame {
   stageClear() {
     const bonusGold = this.stageManager.getCurrentStageData().clearBonusGold;
     this.economy.addGold(bonusGold);
+
+    // タイマーを停止
+    this.isTimerRunning = false;
 
     // BGMを停止
     this.assetLoader.stopBGM();
@@ -827,6 +1107,9 @@ class TowerDefenseGame {
       // 最初のウェーブを開始
       this.waveManager.startNextWave();
 
+      // タイマーを再開
+      this.isTimerRunning = true;
+
       this.gameState = GAME_STATE.PLAYING;
     } else {
       // 全ステージクリア
@@ -847,6 +1130,10 @@ class TowerDefenseGame {
     this.enemies = [];
     this.projectiles = [];
     this.base = null;
+
+    // タイマーをリセット
+    this.totalPlayTime = 0;
+    this.isTimerRunning = false;
 
     // タイトル画面に戻る
     this.gameState = GAME_STATE.TITLE;
