@@ -36,13 +36,19 @@ class TowerDefenseGame {
   constructor() {
     this.canvas = document.getElementById('game-canvas');
     this.loadingDiv = document.getElementById('loading');
+    this.loadingText = document.getElementById('loading-text');
 
-    // Canvas サイズ設定（フィールド + 右サイドパネル + 下HUD）
+    // Canvas サイズ設定（上部情報バー + フィールド + 下HUD）
     this.fieldWidth = TILE_SIZE * 10; // 640px
-    this.sidebarWidth = 200; // 右サイドパネル
+    this.fieldHeight = TILE_SIZE * 10; // 640px
+    this.topbarHeight = 120; // 上部情報バー
     this.hudHeight = 80; // 下部HUD
-    this.canvas.width = this.fieldWidth + this.sidebarWidth; // 840px
-    this.canvas.height = TILE_SIZE * 10 + this.hudHeight; // 720px
+    this.baseWidth = this.fieldWidth; // 640px (縦長レイアウト)
+    this.baseHeight = this.topbarHeight + this.fieldHeight + this.hudHeight; // 840px
+    this.canvas.width = this.baseWidth;
+    this.canvas.height = this.baseHeight;
+    this.adjustCanvasSize = this.adjustCanvasSize.bind(this);
+    this.setupResponsiveCanvas();
 
     // コアシステム初期化
     this.engine = new GameEngine();
@@ -50,8 +56,29 @@ class TowerDefenseGame {
     this.assetLoader = new AssetLoader();
     this.inputManager = new InputManager(this.canvas);
 
+    // サウンド関連
+    this.soundList = [
+      { key: 'bgm_stage1-2', path: './public/assets/sfx/music/stage1-2.mp3' },
+      { key: 'bgm_stage3-4', path: './public/assets/sfx/music/stage3-4.mp3' },
+      { key: 'bgm_stage5', path: './public/assets/sfx/music/stage5.mp3' },
+      { key: 'sfx_clear_fanfare', path: './public/assets/sfx/music/clear_fanfare.mp3' },
+      { key: 'sfx_final_victory_fanfare', path: './public/assets/sfx/music/final_victory_fanfare.mp3' },
+      { key: 'sfx_game_over', path: './public/assets/sfx/music/game_over.mp3' },
+      // 効果音
+      { key: 'se_archer_attack', path: './public/assets/sfx/se/archer_attach.mp3' },
+      { key: 'se_solder_attack', path: './public/assets/sfx/se/solder_attach.mp3' },
+      { key: 'se_build_tower', path: './public/assets/sfx/se/build_tower.mp3' },
+      { key: 'se_damage_tower', path: './public/assets/sfx/se/damage_tower.mp3' },
+      { key: 'se_level_up', path: './public/assets/sfx/se/level_up.mp3' },
+      { key: 'se_speed_change', path: './public/assets/sfx/se/speed_change.mp3' },
+      { key: 'se_button_click', path: './public/assets/sfx/se/button_click.mp3' }
+    ];
+    this.soundsLoaded = false;
+    this.soundLoadingPromise = null;
+    this.isStartingGame = false;
+
     // ゲームシステム初期化
-    this.gameMap = new GameMap();
+    this.gameMap = new GameMap(this.topbarHeight); // Y座標オフセットを渡す
     this.economy = new Economy(50);
     this.stageManager = new StageManager();
     this.waveManager = new WaveManager(this.gameMap.getPathWorldCoordinates());
@@ -72,6 +99,56 @@ class TowerDefenseGame {
 
     // キーボードイベント
     this.setupKeyboardHandlers();
+  }
+
+  /**
+   * ウィンドウサイズに応じてキャンバス表示サイズを調整
+   */
+  setupResponsiveCanvas() {
+    this.adjustCanvasSize();
+    window.addEventListener('resize', this.adjustCanvasSize);
+    window.addEventListener('orientationchange', this.adjustCanvasSize);
+  }
+
+  /**
+   * キャンバスのスタイルサイズを算出
+   */
+  adjustCanvasSize() {
+    if (!this.canvas) return;
+
+    const availableWidth = Math.max(window.innerWidth || this.baseWidth, 1);
+    const availableHeight = Math.max(window.innerHeight || this.baseHeight, 1);
+    const widthRatio = availableWidth / this.baseWidth;
+    const heightRatio = availableHeight / this.baseHeight;
+    const scale = Math.min(widthRatio, heightRatio, 1);
+    const displayWidth = this.baseWidth * scale;
+    const displayHeight = this.baseHeight * scale;
+
+    this.canvas.style.width = `${displayWidth}px`;
+    this.canvas.style.height = `${displayHeight}px`;
+  }
+
+  /**
+   * サウンドをユーザー操作後に読み込み
+   */
+  async loadSoundsIfNeeded() {
+    if (this.soundsLoaded) return;
+    if (!this.soundLoadingPromise) {
+      this.soundLoadingPromise = this.assetLoader.loadSounds(this.soundList)
+        .then(() => {
+          this.soundsLoaded = true;
+        })
+        .catch((error) => {
+          console.error('Sound loading failed:', error);
+          throw error;
+        })
+        .finally(() => {
+          if (!this.soundsLoaded) {
+            this.soundLoadingPromise = null;
+          }
+        });
+    }
+    return this.soundLoadingPromise;
   }
 
   /**
@@ -113,7 +190,7 @@ class TowerDefenseGame {
       this.loadingDiv.classList.add('hidden');
       this.showTitleScreen();
     } else {
-      this.loadingDiv.textContent = 'Failed to load assets!';
+      this.loadingText.textContent = 'Failed to load assets!';
     }
   }
 
@@ -122,6 +199,10 @@ class TowerDefenseGame {
    */
   showTitleScreen() {
     this.gameState = GAME_STATE.TITLE;
+
+    // 攻撃SEのポリフォニー上限を設定（頻繁に鳴る音の重なりを防ぐ）
+    this.assetLoader.setMaxPolyphony('se_archer_attack', 6);
+    this.assetLoader.setMaxPolyphony('se_solder_attack', 6);
 
     // ゲームループを開始（タイトル画面の描画用）
     this.engine.start(
@@ -133,21 +214,64 @@ class TowerDefenseGame {
   /**
    * ゲーム開始
    */
-  startGame() {
-    // 基地を初期化
-    const goalPos = tileToWorld(this.gameMap.goal.x, this.gameMap.goal.y);
-    this.base = new Base(goalPos.x, goalPos.y, 50);
+  async startGame(withSound = true) {
+    if (this.isStartingGame) return;
+    this.isStartingGame = true;
 
-    // ステージデータをロード
-    const stageData = this.stageManager.getCurrentStageData();
-    this.economy.setGold(stageData.startGold);
-    this.waveManager.loadStageWaves(stageData);
+    try {
+      let enableSound = withSound;
+      if (enableSound && !this.soundsLoaded) {
+        const previousMessage = this.loadingText.textContent;
+        this.loadingDiv.classList.remove('hidden');
+        try {
+          await this.loadSoundsIfNeeded();
+        } catch (error) {
+          console.warn('サウンドの読み込みに失敗したため、音なしで開始します。', error);
+          enableSound = false;
+        } finally {
+          this.loadingText.textContent = previousMessage;
+          this.loadingDiv.classList.add('hidden');
+        }
+      }
 
-    // 最初のウェーブを開始
-    this.waveManager.startNextWave();
+      // 音の有無を設定
+      if (enableSound) {
+        this.assetLoader.setMasterVolume(0.9);
+      } else {
+        this.assetLoader.setMasterVolume(0.0);
+      }
 
-    // ゲーム状態を変更
-    this.gameState = GAME_STATE.PLAYING;
+      if (enableSound && this.soundsLoaded) {
+        this.assetLoader.playSound('se_button_click', 0.5);
+      }
+
+      // 基地を初期化（オフセット付き）
+      const goalPos = {
+        x: this.gameMap.goal.x * TILE_SIZE + TILE_SIZE / 2,
+        y: this.gameMap.goal.y * TILE_SIZE + TILE_SIZE / 2 + this.topbarHeight
+      };
+      this.base = new Base(goalPos.x, goalPos.y, 50);
+      this.base.setAssetLoader(this.assetLoader); // assetLoaderを設定
+
+      // ステージデータをロード
+      const stageData = this.stageManager.getCurrentStageData();
+      this.economy.setGold(stageData.startGold);
+      this.waveManager.loadStageWaves(stageData);
+
+      // ステージBGMを再生
+      if (stageData.bgmKey) {
+        const bgmVolume = (stageData.bgmVolume || 1.0) * 0.4;
+        this.assetLoader.playBGM(stageData.bgmKey, bgmVolume);
+      }
+
+      // 最初のウェーブを開始
+      this.waveManager.startNextWave();
+
+      // ゲーム状態を変更
+      this.gameState = GAME_STATE.PLAYING;
+    } finally {
+      this.isStartingGame = false;
+    }
   }
 
   /**
@@ -180,7 +304,7 @@ class TowerDefenseGame {
 
     // タワーの更新
     this.towers.forEach(tower => {
-      tower.update(deltaTime, this.enemies, this.projectiles);
+      tower.update(deltaTime, this.enemies, this.projectiles, this.assetLoader);
     });
 
     // 弾の更新
@@ -192,7 +316,10 @@ class TowerDefenseGame {
     this.projectiles = this.projectiles.filter(p => p.alive);
 
     // 基地が破壊されたらゲームオーバー
-    if (!this.base.alive) {
+    if (!this.base.alive && this.gameState !== GAME_STATE.GAME_OVER) {
+      // BGMを停止してゲームオーバー音楽を再生
+      this.assetLoader.stopBGM();
+      this.assetLoader.playSound('sfx_game_over', 0.6, false);
       this.gameState = GAME_STATE.GAME_OVER;
     }
 
@@ -249,18 +376,20 @@ class TowerDefenseGame {
 
     // UI描画
     if (this.base) {
+      // 上部情報バー（ゲーム情報）
+      this.ui.renderTopbar(this.renderer, this.economy, this.base, this.stageManager, this.waveManager, this.engine.gameSpeed);
+
       // 下部HUD（タワー選択）
       this.ui.renderHUD(this.renderer, TOWER_TYPES, this.assetLoader);
 
-      // 右側サイドバー（ゲーム情報）
-      this.ui.renderSidebar(this.renderer, this.economy, this.base, this.stageManager, this.waveManager, this.engine.gameSpeed);
-
       // タイルハイライト（マウスホバー時）
       const mousePos = this.inputManager.getMousePosition();
-      const tile = worldToTile(mousePos.x, mousePos.y);
+      // オフセットを考慮してタイル座標を計算
+      const adjustedMouseY = mousePos.y - this.topbarHeight;
+      const tile = worldToTile(mousePos.x, adjustedMouseY);
 
-      // フィールド内のタイルハイライト
-      if (tile.y < 10 && tile.x < 10) {
+      // フィールド内のタイルハイライト（Y座標も調整）
+      if (tile.y >= 0 && tile.y < 10 && tile.x < 10) {
         const existingTower = this.getTowerAtTile(tile.x, tile.y);
         const canBuild = canBuildOnTile(tile.x, tile.y);
 
@@ -271,28 +400,28 @@ class TowerDefenseGame {
           this.renderer.drawCircle(existingTower.pos.x, existingTower.pos.y, existingTower.range, 'rgba(255, 200, 100, 0.5)', false, 2);
 
           // タイルハイライトとアップグレードコスト表示
-          this.ui.renderTileHighlight(this.renderer, tile.x, tile.y, TILE_SIZE, false, existingTower.upgradeCost, true);
+          this.ui.renderTileHighlight(this.renderer, tile.x, tile.y, TILE_SIZE, false, existingTower.upgradeCost, true, this.topbarHeight);
         }
         // 建設可能な場合、選択中のタワーの建設コストと範囲を表示
         else if (canBuild) {
           const selectedType = this.ui.getSelectedTowerType() || 'archer';
           const towerType = TOWER_TYPES[selectedType];
           if (towerType) {
-            // 建設予定位置の中心座標を計算
+            // 建設予定位置の中心座標を計算（オフセット付き）
             const centerX = tile.x * TILE_SIZE + TILE_SIZE / 2;
-            const centerY = tile.y * TILE_SIZE + TILE_SIZE / 2;
+            const centerY = tile.y * TILE_SIZE + TILE_SIZE / 2 + this.topbarHeight;
 
             // 攻撃範囲を描画
             this.renderer.drawCircle(centerX, centerY, towerType.range, 'rgba(100, 200, 255, 0.2)', true);
             this.renderer.drawCircle(centerX, centerY, towerType.range, 'rgba(100, 200, 255, 0.5)', false, 2);
 
             // タイルハイライトとコスト表示
-            this.ui.renderTileHighlight(this.renderer, tile.x, tile.y, TILE_SIZE, canBuild, towerType.cost, false);
+            this.ui.renderTileHighlight(this.renderer, tile.x, tile.y, TILE_SIZE, canBuild, towerType.cost, false, this.topbarHeight);
           }
         }
         // 建設不可の場合
         else {
-          this.ui.renderTileHighlight(this.renderer, tile.x, tile.y, TILE_SIZE, canBuild, null, false);
+          this.ui.renderTileHighlight(this.renderer, tile.x, tile.y, TILE_SIZE, canBuild, null, false, this.topbarHeight);
         }
       }
     }
@@ -359,25 +488,36 @@ class TowerDefenseGame {
     // タワー情報表示
     this.renderTowerInfo();
 
-    // 開始ボタンエリア（点滅効果）
-    const time = Date.now() / 1000;
-    const alpha = 0.5 + Math.sin(time * 3) * 0.3;
-    this.renderer.drawText(
-      'クリックしてスタート',
-      centerX,
-      centerY + 180,
-      32,
-      `rgba(255, 235, 59, ${alpha})`,
-      'center'
-    );
+    // 開始ボタン（音ありと音なし）
+    const buttonWidth = 180;
+    const buttonHeight = 50;
+    const buttonSpacing = 20;
+    const totalWidth = buttonWidth * 2 + buttonSpacing;
+    const buttonY = centerY + 160;
+
+    // 音ありボタン（左）
+    const withSoundX = centerX - totalWidth / 2;
+    this.renderer.drawRect(withSoundX, buttonY, buttonWidth, buttonHeight, '#4ecca3', true);
+    this.renderer.ctx.strokeStyle = '#ffffff';
+    this.renderer.ctx.lineWidth = 2;
+    this.renderer.ctx.strokeRect(withSoundX, buttonY, buttonWidth, buttonHeight);
+    this.renderer.drawText('音ありで開始', withSoundX + buttonWidth / 2, buttonY + buttonHeight / 2 + 8, 20, '#ffffff', 'center');
+
+    // 音なしボタン（右）
+    const withoutSoundX = centerX - totalWidth / 2 + buttonWidth + buttonSpacing;
+    this.renderer.drawRect(withoutSoundX, buttonY, buttonWidth, buttonHeight, '#666666', true);
+    this.renderer.ctx.strokeStyle = '#ffffff';
+    this.renderer.ctx.lineWidth = 2;
+    this.renderer.ctx.strokeRect(withoutSoundX, buttonY, buttonWidth, buttonHeight);
+    this.renderer.drawText('音なしで開始', withoutSoundX + buttonWidth / 2, buttonY + buttonHeight / 2 + 8, 20, '#ffffff', 'center');
 
     // 操作説明
-    this.renderer.drawText('操作方法:', centerX, centerY + 240, 18, '#aaaaaa', 'center');
-    this.renderer.drawText('クリック: タワー建設/レベルアップ', centerX, centerY + 265, 14, '#888888', 'center');
-    this.renderer.drawText('速度ボタン: ゲーム速度変更 (×1/×2/×4)', centerX, centerY + 285, 14, '#888888', 'center');
+    this.renderer.drawText('操作方法:', centerX, centerY + 240, 20, '#aaaaaa', 'center');
+    this.renderer.drawText('クリック: タワー建設/レベルアップ', centerX, centerY + 265, 16, '#888888', 'center');
+    this.renderer.drawText('速度ボタン: ゲーム速度変更 (×1/×2/×4)', centerX, centerY + 285, 16, '#888888', 'center');
 
     // クレジット
-    this.renderer.drawText('Tower Defense Game v1.0', centerX, this.canvas.height - 30, 12, '#666666', 'center');
+    this.renderer.drawText('Tower Defense Game v1.0', centerX, this.canvas.height - 30, 14, '#666666', 'center');
   }
 
   /**
@@ -390,7 +530,7 @@ class TowerDefenseGame {
 
     towerOrder.forEach((towerKey, index) => {
       const towerType = TOWER_TYPES[towerKey];
-      const xOffset = (index === 0 ? -180 : 180); // 剣士は左、アーチャーは右
+      const xOffset = (index === 0 ? -120 : 120); // 剣士は左、アーチャーは右
       const x = centerX + xOffset;
       const y = centerY - 20;
 
@@ -414,9 +554,12 @@ class TowerDefenseGame {
       ];
 
       stats.forEach((stat, i) => {
-        this.renderer.drawText(stat, x, y + 70 + i * 20, 14, '#cccccc', 'center');
+        this.renderer.drawText(stat, x, y + 70 + i * 20, 16, '#cccccc', 'center');
       });
     });
+
+    // レベルアップ効果の説明を追加
+    this.renderer.drawText('レベルアップ: ダメージ×1.4倍', centerX, centerY + 140, 16, '#4ecca3', 'center');
   }
 
   /**
@@ -424,9 +567,33 @@ class TowerDefenseGame {
    */
   setupInputHandlers() {
     this.inputManager.onClick((pos) => {
-      // タイトル画面でクリックしたらゲーム開始
+      // タイトル画面でクリックしたらゲーム開始（音ありor音なし判定）
       if (this.gameState === GAME_STATE.TITLE) {
-        this.startGame();
+        const centerX = this.canvas.width / 2;
+        const centerY = this.canvas.height / 2;
+        const buttonWidth = 180;
+        const buttonHeight = 50;
+        const buttonSpacing = 20;
+        const totalWidth = buttonWidth * 2 + buttonSpacing;
+        const buttonY = centerY + 160;
+
+        // 音ありボタン
+        const withSoundX = centerX - totalWidth / 2;
+        if (pos.x >= withSoundX && pos.x <= withSoundX + buttonWidth &&
+            pos.y >= buttonY && pos.y <= buttonY + buttonHeight) {
+          this.startGame(true); // 音ありで開始（サウンド読込後に効果音/BGM再生）
+          return;
+        }
+
+        // 音なしボタン
+        const withoutSoundX = centerX - totalWidth / 2 + buttonWidth + buttonSpacing;
+        if (pos.x >= withoutSoundX && pos.x <= withoutSoundX + buttonWidth &&
+            pos.y >= buttonY && pos.y <= buttonY + buttonHeight) {
+          // 音なしなのでクリック音は鳴らさない
+          this.startGame(false); // 音なしで開始
+          return;
+        }
+
         return;
       }
 
@@ -434,6 +601,7 @@ class TowerDefenseGame {
       if (this.gameState === GAME_STATE.GAME_OVER) {
         const restartButton = this.ui.getRestartButtonBounds();
         if (this.ui.isPointInButton(pos.x, pos.y, restartButton)) {
+          this.assetLoader.playSound('se_button_click', 0.5);
           this.restart();
         }
         return;
@@ -443,15 +611,19 @@ class TowerDefenseGame {
       if (this.gameState === GAME_STATE.STAGE_CLEAR) {
         const nextStageButton = this.ui.getNextStageButtonBounds();
         if (this.ui.isPointInButton(pos.x, pos.y, nextStageButton)) {
-          this.nextStage();
+          // クリック音を再生してから次のステージへ
+          this.assetLoader.playSound('se_button_click', 0.5);
+          // クリック音が鳴る時間を確保するため少し遅延
+          setTimeout(() => this.nextStage(), 100);
         }
         return;
       }
 
       // 全ステージクリア画面：リスタートボタン
       if (this.gameState === GAME_STATE.ALL_CLEAR) {
-        const restartButton = this.ui.getRestartButtonBounds();
+        const restartButton = this.ui.getAllClearRestartButtonBounds();
         if (this.ui.isPointInButton(pos.x, pos.y, restartButton)) {
+          this.assetLoader.playSound('se_button_click', 0.5);
           this.restart();
         }
         return;
@@ -459,18 +631,20 @@ class TowerDefenseGame {
 
       if (this.gameState !== GAME_STATE.PLAYING) return;
 
-      const tile = worldToTile(pos.x, pos.y);
+      // オフセットを考慮してタイル座標を計算
+      const adjustedY = pos.y - this.topbarHeight;
+      const tile = worldToTile(pos.x, adjustedY);
 
       // HUD領域のクリック（タワー選択）
       const hudY = this.canvas.height - this.ui.hudHeight;
-      if (pos.y >= hudY && pos.x < this.fieldWidth) {
+      if (pos.y >= hudY) {
         this.handleHUDClick(pos);
         return;
       }
 
-      // サイドバー領域のクリック
-      if (pos.x >= this.fieldWidth) {
-        this.handleSidebarClick(pos);
+      // 上部バー領域のクリック
+      if (pos.y < this.topbarHeight) {
+        this.handleTopbarClick(pos);
         return;
       }
 
@@ -496,6 +670,11 @@ class TowerDefenseGame {
 
     towerButtons.forEach(button => {
       if (this.ui.isPointInButton(pos.x, pos.y, button)) {
+        // 異なるタワーに切り替えた場合のみ効果音を再生
+        const previousType = this.ui.getSelectedTowerType();
+        if (previousType !== button.key) {
+          this.assetLoader.playSound('se_speed_change', 0.4);
+        }
         this.ui.setSelectedTowerType(button.key);
         console.log(`Selected tower type: ${button.key}`);
       }
@@ -503,9 +682,9 @@ class TowerDefenseGame {
   }
 
   /**
-   * サイドバークリック処理（速度変更）
+   * 上部バークリック処理（速度変更）
    */
-  handleSidebarClick(pos) {
+  handleTopbarClick(pos) {
     // スピード変更ボタン
     const speedButton = this.ui.getSpeedButtonBounds();
     if (this.ui.isPointInButton(pos.x, pos.y, speedButton)) {
@@ -530,11 +709,18 @@ class TowerDefenseGame {
     }
 
     if (this.economy.canAfford(towerType.cost)) {
-      const worldPos = tileToWorld(tileX, tileY);
+      // オフセットを考慮したワールド座標を計算
+      const worldPos = {
+        x: tileX * TILE_SIZE + TILE_SIZE / 2,
+        y: tileY * TILE_SIZE + TILE_SIZE / 2 + this.topbarHeight
+      };
       const tower = new Tower(towerType, tileX, tileY, worldPos.x, worldPos.y);
 
       this.towers.push(tower);
       this.economy.spendGold(towerType.cost);
+
+      // 建設効果音を再生
+      this.assetLoader.playSound('se_build_tower', 0.4);
 
       console.log(`Tower built at (${tileX}, ${tileY})`);
     } else {
@@ -560,6 +746,10 @@ class TowerDefenseGame {
     if (this.economy.canAfford(tower.upgradeCost)) {
       this.economy.spendGold(tower.upgradeCost);
       tower.upgrade();
+
+      // レベルアップ効果音を再生
+      this.assetLoader.playSound('se_level_up', 0.5);
+
       console.log(`Tower upgraded to level ${tower.level}! (Damage: ${tower.damage}, Range: ${tower.range})`);
     } else {
       console.log(`Not enough gold! Need ${tower.upgradeCost}G for upgrade.`);
@@ -577,6 +767,9 @@ class TowerDefenseGame {
     } else {
       this.engine.setGameSpeed(0.5);
     }
+
+    // 速度変更効果音を再生
+    this.assetLoader.playSound('se_speed_change', 0.4);
   }
 
   /**
@@ -586,14 +779,19 @@ class TowerDefenseGame {
     const bonusGold = this.stageManager.getCurrentStageData().clearBonusGold;
     this.economy.addGold(bonusGold);
 
+    // BGMを停止
+    this.assetLoader.stopBGM();
+
     // 次のステージがあるかチェック
     const nextStageNumber = this.stageManager.getCurrentStageNumber() + 1;
     if (this.stageManager.hasStage(nextStageNumber)) {
-      // 次のステージがある場合はステージクリア画面を表示
+      // 次のステージがある場合はクリアファンファーレを再生
+      this.assetLoader.playSound('sfx_clear_fanfare', 0.6);
       this.gameState = GAME_STATE.STAGE_CLEAR;
       console.log('Stage Clear!');
     } else {
-      // 最後のステージの場合は直接全クリア画面を表示
+      // 最後のステージの場合は全クリファンファーレを再生
+      this.assetLoader.playSound('sfx_final_victory_fanfare', 0.6);
       this.gameState = GAME_STATE.ALL_CLEAR;
       console.log('All stages cleared!');
     }
@@ -603,6 +801,9 @@ class TowerDefenseGame {
    * 次のステージへ
    */
   nextStage() {
+    // ファンファーレなど再生中の効果音をすべて停止
+    this.assetLoader.stopAllSounds();
+
     this.stageManager.nextStage();
 
     if (this.stageManager.hasStage(this.stageManager.getCurrentStageNumber())) {
@@ -616,6 +817,12 @@ class TowerDefenseGame {
       // 敵と弾をクリア
       this.enemies = [];
       this.projectiles = [];
+
+      // 新しいステージのBGMを再生
+      if (stageData.bgmKey) {
+        const bgmVolume = (stageData.bgmVolume || 1.0) * 0.4;
+        this.assetLoader.playBGM(stageData.bgmKey, bgmVolume);
+      }
 
       // 最初のウェーブを開始
       this.waveManager.startNextWave();
@@ -632,6 +839,9 @@ class TowerDefenseGame {
    * ゲームをリスタート
    */
   restart() {
+    // すべての音を停止
+    this.assetLoader.stopAllAudio();
+
     this.stageManager.resetStage();
     this.towers = [];
     this.enemies = [];
@@ -640,9 +850,7 @@ class TowerDefenseGame {
 
     // タイトル画面に戻る
     this.gameState = GAME_STATE.TITLE;
-  }
-
-  /**
+  }  /**
    * キーボードハンドラー設定（PC用補助機能として残す）
    */
   setupKeyboardHandlers() {

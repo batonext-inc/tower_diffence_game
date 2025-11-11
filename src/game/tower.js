@@ -121,20 +121,31 @@ export class Tower extends Entity {
     this.fireTimer = 0;
     this.currentTarget = null;
     this.direction = 'r'; // 向き（8方向: u,d,l,r,lu,ld,ru,rd）
+
+    // レベルアップエフェクト用
+    this.levelUpEffect = null;
   }
 
   /**
    * 更新
    */
-  update(deltaTime, enemies, projectiles) {
+  update(deltaTime, enemies, projectiles, assetLoader = null) {
     this.fireTimer += deltaTime;
+
+    // レベルアップエフェクトの更新
+    if (this.levelUpEffect) {
+      this.levelUpEffect.timer += deltaTime;
+      if (this.levelUpEffect.timer >= this.levelUpEffect.duration) {
+        this.levelUpEffect = null;
+      }
+    }
 
     // ターゲット選択
     this.currentTarget = this.selectTarget(enemies);
 
     // 発射
     if (this.currentTarget && this.fireTimer >= 1.0 / this.fireRate) {
-      this.fire(projectiles);
+      this.fire(projectiles, assetLoader);
       this.fireTimer = 0;
     }
 
@@ -175,8 +186,9 @@ export class Tower extends Entity {
   /**
    * 発射
    */
-  fire(projectiles) {
+  fire(projectiles, assetLoader = null) {
     if (!this.currentTarget) return;
+
     const projectile = new Projectile(
       this.pos.x,
       this.pos.y,
@@ -186,6 +198,16 @@ export class Tower extends Entity {
       this.type.spriteId.replace('tower_', '') // 'tower_solder' -> 'solder'
     );
     projectiles.push(projectile);
+
+    // 攻撃効果音を再生
+    if (assetLoader) {
+      const towerType = this.type.spriteId.replace('tower_', '');
+      if (towerType === 'archer') {
+        assetLoader.playSound('se_archer_attack', 0.3);
+      } else if (towerType === 'solder') {
+        assetLoader.playSound('se_solder_attack', 0.3);
+      }
+    }
   }
 
   /**
@@ -196,6 +218,25 @@ export class Tower extends Entity {
     this.level++;
     this.damage = Math.floor(this.damage * 1.4);
     this.upgradeCost = Math.floor(this.upgradeCost * 1.2);
+
+    // レベルアップエフェクトを開始
+    this.levelUpEffect = {
+      timer: 0,
+      duration: 0.8, // 0.8秒間表示
+      particles: []
+    };
+
+    // パーティクルを生成（星型の光エフェクト）
+    const particleCount = 12;
+    for (let i = 0; i < particleCount; i++) {
+      const angle = (Math.PI * 2 * i) / particleCount;
+      this.levelUpEffect.particles.push({
+        angle: angle,
+        distance: 0,
+        maxDistance: 40,
+        speed: 80 // px/sec
+      });
+    }
   }
 
   /**
@@ -224,6 +265,11 @@ export class Tower extends Entity {
   render(renderer, assetLoader) {
     if (!this.alive) return;
 
+    // レベルアップエフェクトを描画（タワー画像の後ろ）
+    if (this.levelUpEffect) {
+      this.renderLevelUpEffect(renderer);
+    }
+
     // 射程範囲（デバッグ用、オプション）
     // renderer.drawCircle(this.pos.x, this.pos.y, this.range, 'rgba(255,255,255,0.1)', false);
 
@@ -249,12 +295,62 @@ export class Tower extends Entity {
     // レベル表示（タワー画像の中央やや上に表示してマスからはみ出さないように）
     renderer.drawText(`Lv${this.level}`, this.pos.x, this.pos.y - 8, 11, '#fff', 'center');
   }
+
+  /**
+   * レベルアップエフェクトを描画
+   */
+  renderLevelUpEffect(renderer) {
+    const effect = this.levelUpEffect;
+    const progress = effect.timer / effect.duration;
+    const alpha = 1 - progress; // フェードアウト
+
+    const ctx = renderer.ctx;
+    ctx.save();
+
+    // マス全体に光のフラッシュエフェクト
+    const tileSize = 64;
+    const flashAlpha = Math.max(0, alpha * 0.5);
+    ctx.fillStyle = `rgba(255, 223, 61, ${flashAlpha})`;
+    ctx.fillRect(this.pos.x - tileSize / 2, this.pos.y - tileSize / 2, tileSize, tileSize);
+
+    // パーティクル（星型の光）を描画
+    effect.particles.forEach(particle => {
+      particle.distance += particle.speed * (effect.timer / effect.duration) * 0.016; // 近似的なdeltaTime
+      if (particle.distance > particle.maxDistance) return;
+
+      const x = this.pos.x + Math.cos(particle.angle) * particle.distance;
+      const y = this.pos.y + Math.sin(particle.angle) * particle.distance;
+
+      // 星型の光
+      ctx.fillStyle = `rgba(255, 223, 61, ${alpha})`;
+      ctx.beginPath();
+      ctx.arc(x, y, 3, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 内側の白い光
+      ctx.fillStyle = `rgba(255, 255, 255, ${alpha * 0.8})`;
+      ctx.beginPath();
+      ctx.arc(x, y, 1.5, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    ctx.restore();
+  }
 }
 
 /**
  * タワータイプ定義
  */
 export const TOWER_TYPES = {
+  solder: {
+    cost: 30,
+    upgradeCost: 20,
+    range: 120,
+    fireRate: 1.4, // 1.4発/秒
+    damage: 6,
+    targetMode: 'closest',
+    spriteId: 'tower_solder'
+  },
   archer: {
     cost: 40,
     upgradeCost: 30,
@@ -264,14 +360,5 @@ export const TOWER_TYPES = {
     targetMode: 'first',
     spriteId: 'tower_archer'
   },
-  solder: {
-    cost: 30,
-    upgradeCost: 20,
-    range: 120,
-    fireRate: 1.5, // 1.5発/秒
-    damage: 5.5,
-    targetMode: 'closest',
-    spriteId: 'tower_solder'
-  }
   // 他のタワータイプを追加可能
 };

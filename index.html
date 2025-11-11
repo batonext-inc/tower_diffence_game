@@ -15,11 +15,14 @@
       font-family: 'Arial', sans-serif;
       background-color: #1a1a2e;
       color: #eee;
-      overflow: hidden;
       display: flex;
       justify-content: center;
       align-items: center;
-      height: 100vh;
+      height: 100svh;
+      width: 100vw;
+      position: fixed;
+      top: 0;
+      left: 0;
     }
 
     .sr-only {
@@ -36,8 +39,9 @@
 
     #game-container {
       position: relative;
-      max-width: 100%;
-      max-height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
 
     #game-canvas {
@@ -46,6 +50,11 @@
       border: 2px solid #0f3460;
       image-rendering: pixelated;
       image-rendering: crisp-edges;
+      max-width: 100vw;
+      max-height: 100vh;
+      width: auto;
+      height: auto;
+      object-fit: contain;
     }
 
     #loading {
@@ -53,8 +62,29 @@
       top: 50%;
       left: 50%;
       transform: translate(-50%, -50%);
-      font-size: 24px;
+      text-align: center;
+      pointer-events: none;
+    }
+
+    .spinner {
+      width: 50px;
+      height: 50px;
+      border: 5px solid rgba(233, 69, 96, 0.2);
+      border-top: 5px solid #e94560;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    #loading-text {
+      font-size: 20px;
       color: #e94560;
+      margin-top: 10px;
     }
 
     .hidden {
@@ -66,7 +96,10 @@
   <div id="game-container">
     <h1 class="sr-only">Tower Defense Game</h1>
     <canvas id="game-canvas"></canvas>
-    <div id="loading">Loading...</div>
+    <div id="loading">
+      <div class="spinner"></div>
+      <div id="loading-text">Loading...</div>
+    </div>
   </div>
 
   <script type="module" src="./src/main.js"></script>

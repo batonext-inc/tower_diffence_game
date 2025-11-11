@@ -16,10 +16,12 @@ export class StageManager {
       1: {
         startGold: 100,
         waves: [
-          { delay: 2.0, enemies: [{ type: 'slime', n: 10, interval: 0.8 }] },
-          { delay: 2.0, enemies: [{ type: 'slime', n: 15, interval: 0.6 }] }
+          { delay: 2.0, enemies: [{ type: 'slime', n: 10, interval: 1.0 }] },
+          { delay: 2.0, enemies: [{ type: 'slime', n: 12, interval: 0.7 }] }
         ],
-        clearBonusGold: 30
+        clearBonusGold: 30,
+        bgmKey: 'bgm_stage1-2',
+        bgmVolume: 1.0
       },
       2: {
         startGold: 0, // 前ステージから引き継ぐ
@@ -33,7 +35,9 @@ export class StageManager {
             { type: 'goblin', n: 12, interval: 0.5 }
           ]}
         ],
-        clearBonusGold: 40
+        clearBonusGold: 40,
+        bgmKey: 'bgm_stage1-2',
+        bgmVolume: 1.0
       },
       3: {
         startGold: 0,
@@ -46,31 +50,37 @@ export class StageManager {
             { type: 'thief', n: 15, interval: 0.4 }
           ]},
           { delay: 2.0, enemies: [
-            { type: 'slime', n: 15, interval: 0.4 },
-            { type: 'goblin', n: 15, interval: 0.4 },
-            { type: 'thief', n: 10, interval: 0.5 }
+            { type: 'slime', n: 10, interval: 0.4 },
+            { type: 'goblin', n: 10, interval: 0.4 },
+            { type: 'thief', n: 20, interval: 0.4 }
           ]}
         ],
-        clearBonusGold: 50
+        clearBonusGold: 50,
+        bgmKey: 'bgm_stage3-4',
+        bgmVolume: 1.0
       },
       4: {
         startGold: 0,
         waves: [
           { delay: 2.0, enemies: [
             { type: 'goblin', n: 20, interval: 0.5 },
-            { type: 'golem', n: 5, interval: 2.0 }
+            { type: 'golem', n: 5, interval: 1.5 }
           ]},
           { delay: 2.0, enemies: [
             { type: 'thief', n: 20, interval: 0.4 },
             { type: 'golem', n: 8, interval: 1.5 }
           ]},
           { delay: 2.0, enemies: [
-            { type: 'slime', n: 25, interval: 0.3 },
-            { type: 'goblin', n: 20, interval: 0.4 },
-            { type: 'golem', n: 10, interval: 1.2 }
+            { type: 'golem', n: 5, interval: 1.0 },
+            { type: 'slime', n: 15, interval: 0.3 },
+            { type: 'goblin', n: 15, interval: 0.4 },
+            { type: 'golem', n: 5, interval: 1.0 },
+            { type: 'thief', n: 10, interval: 0.4 },
           ]}
         ],
-        clearBonusGold: 80
+        clearBonusGold: 60,
+        bgmKey: 'bgm_stage3-4',
+        bgmVolume: 1.0
       },
       5: {
         startGold: 0,
@@ -79,13 +89,15 @@ export class StageManager {
             { type: 'demon_king', n: 1, interval: 0 }
           ]},
           { delay: 2.0, enemies: [
-            { type: 'demon_king', n: 2, interval: 5.0 }
+            { type: 'demon_king', n: 2, interval: 4.0 }
           ]},
           { delay: 2.0, enemies: [
             { type: 'demon_king', n: 3, interval: 3.0 }
           ]}
         ],
-        clearBonusGold: 200
+        clearBonusGold: 0,
+        bgmKey: 'bgm_stage5',
+        bgmVolume: 1.15
       }
       // さらにステージを追加可能
     };

@@ -8,6 +8,32 @@ export class Base extends Entity {
   constructor(x, y, hp = 50) {
     super(x, y, hp);
     this.spriteId = 'base_tower';
+    this.assetLoader = null; // assetLoaderを保持
+  }
+
+  /**
+   * assetLoaderを設定
+   */
+  setAssetLoader(assetLoader) {
+    this.assetLoader = assetLoader;
+  }
+
+  /**
+   * ダメージを受ける（オーバーライド）
+   */
+  takeDamage(damage) {
+    this.hp -= damage;
+
+    // ダメージ効果音を再生
+    if (this.assetLoader && this.alive) {
+      this.assetLoader.playSound('se_damage_tower', 0.4);
+    }
+
+    if (this.hp <= 0) {
+      this.hp = 0;
+      this.alive = false;
+      this.onDeath();
+    }
   }
 
   /**

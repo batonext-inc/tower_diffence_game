@@ -132,7 +132,7 @@ export class Enemy extends Entity {
  */
 export const ENEMY_TYPES = {
   slime: {
-    hp: 30,
+    hp: 35,
     speed: 60, // px/sec
     bounty: 5,
     attackInterval: 1.0,
@@ -140,7 +140,7 @@ export const ENEMY_TYPES = {
     spriteId: 'enemy_slime'
   },
   goblin: {
-    hp: 45,
+    hp: 50,
     speed: 80, // px/sec (スライムより速い)
     bounty: 8,
     attackInterval: 0.8,
@@ -148,7 +148,7 @@ export const ENEMY_TYPES = {
     spriteId: 'enemy_goblin'
   },
   thief: {
-    hp: 60,
+    hp: 70,
     speed: 120, // px/sec (非常に速い)
     bounty: 10,
     attackInterval: 1.2,
@@ -156,7 +156,7 @@ export const ENEMY_TYPES = {
     spriteId: 'enemy_thief'
   },
   golem: {
-    hp: 500,
+    hp: 600,
     speed: 40, // px/sec (遅いが頑丈)
     bounty: 20,
     attackInterval: 1.5,
@@ -164,8 +164,8 @@ export const ENEMY_TYPES = {
     spriteId: 'enemy_golem'
   },
   demon_king: {
-    hp: 1800,
-    speed: 50, // px/sec (最終ボス)
+    hp: 2200,
+    speed: 48, // px/sec (最終ボス)
     bounty: 100,
     attackInterval: 0.5,
     attackDamage: 5,

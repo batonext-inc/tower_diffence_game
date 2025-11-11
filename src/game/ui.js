@@ -5,11 +5,56 @@
 export class UI {
   constructor(canvas) {
     this.canvas = canvas;
-    this.hudHeight = 80;
-    this.sidebarWidth = 200;
+    this.topbarHeight = 120; // 上部情報バー（旧サイドバー）
+    this.hudHeight = 80; // 下部タワー選択UI
     this.fieldWidth = 640; // TILE_SIZE * 10
+    this.fieldHeight = 640; // TILE_SIZE * 10
     this.selectedTowerType = 'solder'; // デフォルトで剣士を選択
     this.hoveredTile = null;
+  }
+
+  /**
+   * 上部情報バーを描画（旧サイドバー）
+   */
+  renderTopbar(renderer, economy, base, stageManager, waveManager, gameSpeed) {
+    const topbarY = 0;
+
+    // 背景
+    renderer.drawRect(0, topbarY, this.canvas.width, this.topbarHeight, 'rgba(0,0,0,0.9)', true);
+
+    // 左側:ゴールドとBase HP
+    const leftX = 80;
+    renderer.drawText('Gold', leftX, 25, 16, '#ffd93d', 'center');
+    renderer.drawText(`${economy.getGold()}G`, leftX, 45, 20, '#ffffff', 'center');
+
+    renderer.drawText('Base HP', leftX, 75, 16, '#e74c3c', 'center');
+    renderer.drawText(`${base.hp}/${base.maxHp}`, leftX, 95, 20, '#ffffff', 'center');
+
+    // 中央：ステージとウェーブ
+    const centerX = this.canvas.width / 2;
+    renderer.drawText('ゲーム情報', centerX, 55, 20, '#4ecca3', 'center');
+
+    const currentWave = waveManager.getCurrentWaveNumber();
+    const totalWaves = waveManager.getTotalWaves();
+    renderer.drawText(`Stage ${stageManager.getCurrentStageNumber()}  Wave ${currentWave}/${totalWaves}`,
+      centerX, 75, 18, '#ffffff', 'center');
+
+    // 速度変更ボタン（右側）
+    const speedButtonWidth = 120;
+    const speedButtonHeight = 35;
+    const speedButtonX = this.canvas.width - speedButtonWidth - 20;
+    const speedButtonY = 40;
+
+    renderer.drawRect(speedButtonX, speedButtonY, speedButtonWidth, speedButtonHeight, 'rgba(100,100,100,0.8)', true);
+    renderer.ctx.strokeStyle = '#4ecca3';
+    renderer.ctx.lineWidth = 2;
+    renderer.ctx.strokeRect(speedButtonX, speedButtonY, speedButtonWidth, speedButtonHeight);
+
+    let speedText = '';
+    if (gameSpeed === 0.5) speedText = '速度: ×1';
+    else if (gameSpeed === 1.0) speedText = '速度: ×2';
+    else if (gameSpeed === 2.0) speedText = '速度: ×4';
+    renderer.drawText(speedText, speedButtonX + speedButtonWidth / 2, speedButtonY + speedButtonHeight / 2 + 5, 18, '#ffffff', 'center');
   }
 
   /**
@@ -19,11 +64,11 @@ export class UI {
     const ctx = renderer.ctx;
     const hudY = this.canvas.height - this.hudHeight;
 
-    // HUD背景（フィールド部分のみ）
-    renderer.drawRect(0, hudY, this.fieldWidth, this.hudHeight, 'rgba(0,0,0,0.7)', true);
+    // HUD背景（全幅）
+    renderer.drawRect(0, hudY, this.canvas.width, this.hudHeight, 'rgba(0,0,0,0.7)', true);
 
     // タイトル
-    renderer.drawText('タワー選択', 20, hudY + 20, 16, '#4ecca3', 'left');
+    renderer.drawText('タワー選択', 20, hudY + 20, 18, '#4ecca3', 'left');
 
     // タワーボタン（順番を剣士→アーチャーに変更）
     const towerOrder = ['solder', 'archer'];
@@ -57,61 +102,16 @@ export class UI {
 
       // タワー名（日本語）
       const towerName = key === 'archer' ? 'アーチャー' : key === 'solder' ? '剣士' : key;
-      renderer.drawText(towerName, buttonX + 45, buttonY + 13, 14, '#fff', 'left');
+      renderer.drawText(towerName, buttonX + 45, buttonY + 13, 16, '#fff', 'left');
 
       // コスト表示
-      renderer.drawText(`${tower.cost}G`, buttonX + 45, buttonY + 28, 12, '#ffd93d', 'left');
+      renderer.drawText(`${tower.cost}G`, buttonX + 45, buttonY + 28, 14, '#ffd93d', 'left');
 
       buttonX += buttonWidth + buttonSpacing;
     });
   }
 
   /**
-   * サイドバーを描画（右側：ゲーム情報と速度ボタン）
-   */
-  renderSidebar(renderer, economy, base, stageManager, waveManager, gameSpeed) {
-    const sidebarX = this.fieldWidth;
-    const sidebarY = 0;
-    const sidebarHeight = this.canvas.height;
-
-    // サイドバー背景
-    renderer.drawRect(sidebarX, sidebarY, this.sidebarWidth, sidebarHeight, 'rgba(0,0,0,0.9)', true);
-
-    // タイトル
-    renderer.drawText('ゲーム情報', sidebarX + this.sidebarWidth / 2, 30, 18, '#4ecca3', 'center');
-
-    // ゴールド表示
-    renderer.drawText('Gold', sidebarX + this.sidebarWidth / 2, 60, 14, '#ffd93d', 'center');
-    renderer.drawText(`${economy.getGold()}G`, sidebarX + this.sidebarWidth / 2, 80, 20, '#ffffff', 'center');
-
-    // 基地HP表示
-    renderer.drawText('Base HP', sidebarX + this.sidebarWidth / 2, 110, 14, '#e74c3c', 'center');
-    renderer.drawText(`${base.hp}/${base.maxHp}`, sidebarX + this.sidebarWidth / 2, 130, 20, '#ffffff', 'center');
-
-    // ステージ表示
-    renderer.drawText('Stage', sidebarX + this.sidebarWidth / 2, 160, 14, '#4ecca3', 'center');
-    renderer.drawText(`${stageManager.getCurrentStageNumber()}`, sidebarX + this.sidebarWidth / 2, 180, 20, '#ffffff', 'center');
-
-    // ウェーブ表示
-    const currentWave = waveManager.getCurrentWaveNumber();
-    const totalWaves = waveManager.getTotalWaves();
-    renderer.drawText('Wave', sidebarX + this.sidebarWidth / 2, 210, 14, '#fff', 'center');
-    renderer.drawText(`${currentWave}/${totalWaves}`, sidebarX + this.sidebarWidth / 2, 230, 20, '#ffffff', 'center');
-
-    // スピード変更ボタン
-    const speedButtonY = 270;
-    const speedButtonHeight = 40;
-    renderer.drawRect(sidebarX + 10, speedButtonY, this.sidebarWidth - 20, speedButtonHeight, 'rgba(100,100,100,0.8)', true);
-    renderer.ctx.strokeStyle = '#4ecca3';
-    renderer.ctx.lineWidth = 2;
-    renderer.ctx.strokeRect(sidebarX + 10, speedButtonY, this.sidebarWidth - 20, speedButtonHeight);
-
-    let speedText = '';
-    if (gameSpeed === 0.5) speedText = '速度変更: ×1';
-    else if (gameSpeed === 1.0) speedText = '速度変更: ×2';
-    else if (gameSpeed === 2.0) speedText = '速度変更: ×4';
-    renderer.drawText(speedText, sidebarX + this.sidebarWidth / 2, speedButtonY + speedButtonHeight / 2 + 5, 16, '#ffffff', 'center');
-  }  /**
    * ビルドメニューを描画（簡易版）
    */
   renderBuildMenu(renderer, towerTypes) {
@@ -120,7 +120,7 @@ export class UI {
     const menuY = 20;
 
     renderer.drawRect(menuX, menuY, 140, 200, 'rgba(0,0,0,0.8)', true);
-    renderer.drawText('タワー建設', menuX + 70, menuY + 25, 16, '#fff', 'center');
+    renderer.drawText('タワー建設', menuX + 70, menuY + 25, 18, '#fff', 'center');
 
     let offsetY = 50;
     Object.keys(towerTypes).forEach(key => {
@@ -132,7 +132,7 @@ export class UI {
 
       renderer.drawText(
         `${towerName}: ${tower.cost}G`,
-        menuX + 10, menuY + offsetY, 14, color, 'left'
+        menuX + 10, menuY + offsetY, 16, color, 'left'
       );
 
       offsetY += 30;
@@ -221,9 +221,9 @@ export class UI {
   /**
    * タイルハイライト
    */
-  renderTileHighlight(renderer, tileX, tileY, tileSize, canBuild, cost = null, isUpgrade = false) {
+  renderTileHighlight(renderer, tileX, tileY, tileSize, canBuild, cost = null, isUpgrade = false, yOffset = 0) {
     const x = tileX * tileSize;
-    const y = tileY * tileSize;
+    const y = tileY * tileSize + yOffset;
 
     // ハイライトの色を設定
     let color;
@@ -265,16 +265,19 @@ export class UI {
   }
 
   /**
-   * スピードボタンの領域を取得（サイドバー内）
+   * スピードボタンの領域を取得（上部バー内）
    */
   getSpeedButtonBounds() {
-    const sidebarX = this.fieldWidth;
-    const speedButtonY = 270;
+    const speedButtonWidth = 120;
+    const speedButtonHeight = 35;
+    const speedButtonX = this.canvas.width - speedButtonWidth - 20;
+    const speedButtonY = 40;
+
     return {
-      x: sidebarX + 10,
+      x: speedButtonX,
       y: speedButtonY,
-      width: this.sidebarWidth - 20,
-      height: 40
+      width: speedButtonWidth,
+      height: speedButtonHeight
     };
   }
 
@@ -317,7 +320,23 @@ export class UI {
     const buttonHeight = 50;
     return {
       x: centerX - buttonWidth / 2,
-      y: centerY + 70,
+      y: centerY + 20, // renderGameOverと一致させる
+      width: buttonWidth,
+      height: buttonHeight
+    };
+  }
+
+  /**
+   * 全クリ画面のリスタートボタン領域を取得
+   */
+  getAllClearRestartButtonBounds() {
+    const centerX = this.canvas.width / 2;
+    const centerY = this.canvas.height / 2;
+    const buttonWidth = 200;
+    const buttonHeight = 50;
+    return {
+      x: centerX - buttonWidth / 2,
+      y: centerY + 70, // renderAllClearと一致させる
       width: buttonWidth,
       height: buttonHeight
     };
